@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Power BI Dashboard Hub - Access all your business dashboards in one seamless interface">
+  <title>Dashboard Hub | Power BI Analytics</title>
+  
+  <!-- Google Fonts - Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="index.css">
+  
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+</head>
+<body>
+  <div class="app">
+    
+    <!-- Hidden Sidebar Navigation -->
+    <nav class="sidebar" id="sidebar" aria-label="Dashboard navigation">
+      <div class="sidebar__header">
+        <div class="sidebar__title">
+          <span>📊</span>
+          <span>Dashboard Hub</span>
+        </div>
+      </div>
+      <div class="sidebar__content" id="sidebar-content">
+        <!-- Populated by JavaScript -->
+      </div>
+    </nav>
+    
+    <!-- Home Button (visible in dashboard view) -->
+    <button class="home-button" id="home-button" aria-label="Return to homepage">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+        <polyline points="9 22 9 12 15 12 15 22"></polyline>
+      </svg>
+    </button>
+    
+    <!-- Homepage -->
+    <main class="homepage" id="homepage">
+      <header class="header">
+        <h1 class="header__title">Dashboard Hub</h1>
+        <p class="header__subtitle">Select a category to explore your analytics dashboards</p>
+      </header>
+      
+      <div class="categories" id="categories">
+        <!-- Populated by JavaScript -->
+      </div>
+    </main>
+    
+    <!-- Dashboard View (Full-screen Power BI embed) -->
+    <div class="dashboard-view" id="dashboard-view">
+      <div class="dashboard-container" id="dashboard-container">
+        <iframe 
+          title="Power BI Dashboard" 
+          allowfullscreen="true"
+          style="opacity: 0; transition: opacity 200ms ease-in-out;"
+        ></iframe>
+        
+        <!-- Loading State -->
+        <div class="dashboard-loading" id="dashboard-loading">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">Loading dashboard...</div>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+  
+  <!-- Scripts -->
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
