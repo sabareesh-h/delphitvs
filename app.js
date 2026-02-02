@@ -21,6 +21,7 @@ class DashboardHub {
         this.sidebar = document.getElementById('sidebar');
         this.categoriesContainer = document.getElementById('categories');
         this.sidebarContent = document.getElementById('sidebar-content');
+        this.sidebarHomeTrigger = document.getElementById('sidebar-home-trigger');
 
         // Initialize
         this.init();
@@ -126,6 +127,12 @@ class DashboardHub {
             if (dashboard) {
                 this.openDashboard(dashboard.dataset.dashboardId, dashboard.dataset.categoryId);
             }
+        });
+
+        // Sidebar Title click to go home
+        this.sidebarHomeTrigger.addEventListener('click', () => {
+            this.goHome();
+            this.collapseSidebar(); // Optional: close sidebar when going home
         });
 
         // Keyboard navigation
@@ -276,8 +283,12 @@ class DashboardHub {
 
     scheduleSidebarClose() {
         this.sidebarCloseTimeout = setTimeout(() => {
-            this.sidebar.classList.remove('expanded');
+            this.collapseSidebar();
         }, 300);
+    }
+
+    collapseSidebar() {
+        this.sidebar.classList.remove('expanded');
     }
 
     updateSidebarHighlight() {
