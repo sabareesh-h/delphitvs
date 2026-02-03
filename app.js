@@ -10,14 +10,15 @@ class DashboardHub {
         this.currentDashboard = null;
         this.expandedCategories = new Set();
         this.sidebarCloseTimeout = null;
+        this.loadedDashboards = new Map(); // Store iframes by dashboard ID
+        this.expandedGroups = new Set(); // Track expanded group IDs
 
         // DOM Elements
         this.homepage = document.getElementById('homepage');
         this.dashboardView = document.getElementById('dashboard-view');
         this.dashboardContainer = document.getElementById('dashboard-container');
-        this.dashboardLoading = document.getElementById('dashboard-loading');
-        this.loadingText = document.querySelector('.loading-text');
-        this.homeButton = document.getElementById('home-button');
+
+
         this.sidebar = document.getElementById('sidebar');
         this.categoriesContainer = document.getElementById('categories');
         this.sidebarContent = document.getElementById('sidebar-content');
@@ -47,7 +48,7 @@ class DashboardHub {
             <div class="category-name">${category.name}</div>
             <div class="category-description">${category.description}</div>
           </div>
-          <div class="category-count">${category.dashboards.length} dashboard${category.dashboards.length !== 1 ? 's' : ''}</div>
+          <div class="category-count">${category.dashboards.length} report${category.dashboards.length !== 1 ? 's' : ''}</div>
           <div class="category-expand-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="6 9 12 15 18 9"></polyline>
@@ -67,7 +68,7 @@ class DashboardHub {
                 </div>
                 <div class="dashboard-card__info">
                   <div class="dashboard-card__title">${dashboard.title}</div>
-                  <div class="dashboard-card__purpose">${dashboard.purpose}</div>
+                  <div class="dashboard-card__purpose">${dashboard.purpose || ''}</div>
                 </div>
                 <div class="dashboard-card__arrow">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -89,11 +90,33 @@ class DashboardHub {
           <span class="sidebar-category__icon">${category.icon}</span>
           <span>${category.name}</span>
         </div>
-        ${category.dashboards.map(dashboard => `
-          <div class="sidebar-dashboard" data-dashboard-id="${dashboard.id}" data-category-id="${category.id}">
-            ${dashboard.title}
-          </div>
-        `).join('')}
+        ${category.dashboards.map(dashboard => {
+            if (dashboard.isGroup) {
+                const isExpanded = this.expandedGroups.has(dashboard.id);
+                return `
+              <div class="sidebar-group ${isExpanded ? 'expanded' : ''}" data-group-id="${dashboard.id}">
+                <div class="sidebar-group__header">
+                  <span>${dashboard.title}</span>
+                  <svg class="sidebar-group__toggle" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </div>
+                <div class="sidebar-group__items">
+                  ${dashboard.dashboards.map(subD => `
+                    <div class="sidebar-dashboard" data-dashboard-id="${subD.id}" data-category-id="${category.id}">
+                      ${subD.title}
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            `;
+            }
+            return `
+            <div class="sidebar-dashboard" data-dashboard-id="${dashboard.id}" data-category-id="${category.id}">
+              ${dashboard.title}
+            </div>
+          `;
+        }).join('')}
       </div>
     `).join('');
     }
@@ -115,8 +138,6 @@ class DashboardHub {
             }
         });
 
-        // Home button
-        this.homeButton.addEventListener('click', () => this.goHome());
 
         // Sidebar interactions
         this.sidebar.addEventListener('mouseenter', () => this.expandSidebar());
@@ -124,6 +145,22 @@ class DashboardHub {
 
         this.sidebarContent.addEventListener('click', (e) => {
             const dashboard = e.target.closest('.sidebar-dashboard');
+            const groupHeader = e.target.closest('.sidebar-group__header');
+
+            if (groupHeader) {
+                const group = groupHeader.closest('.sidebar-group');
+                const groupId = group.dataset.groupId;
+
+                if (this.expandedGroups.has(groupId)) {
+                    this.expandedGroups.delete(groupId);
+                    group.classList.remove('expanded');
+                } else {
+                    this.expandedGroups.add(groupId);
+                    group.classList.add('expanded');
+                }
+                return;
+            }
+
             if (dashboard) {
                 this.openDashboard(dashboard.dataset.dashboardId, dashboard.dataset.categoryId);
             }
@@ -142,11 +179,7 @@ class DashboardHub {
             }
         });
 
-        // Handle iframe load
-        const iframe = this.dashboardContainer.querySelector('iframe');
-        if (iframe) {
-            iframe.addEventListener('load', () => this.onDashboardLoaded());
-        }
+
     }
 
     // ============================================
@@ -187,7 +220,27 @@ class DashboardHub {
         const category = DASHBOARD_CONFIG.categories.find(c => c.id === categoryId);
         if (!category) return;
 
-        const dashboard = category.dashboards.find(d => d.id === dashboardId);
+        // Search in individual dashboards and inside groups
+        let dashboard = null;
+        category.dashboards.forEach(d => {
+            if (d.id === dashboardId) {
+                // If the user clicked a group on the homepage, open the first dashboard in that group
+                if (d.isGroup) {
+                    dashboard = d.dashboards[0];
+                    dashboardId = dashboard.id; // Correct the ID to the specific dashboard's ID
+                    this.expandedGroups.add(d.id); // Also expand it in the sidebar
+                } else {
+                    dashboard = d;
+                }
+            } else if (d.isGroup) {
+                const subD = d.dashboards.find(sd => sd.id === dashboardId);
+                if (subD) {
+                    dashboard = subD;
+                    this.expandedGroups.add(d.id); // Ensure group is expanded if sub-dashboard opened
+                }
+            }
+        });
+
         if (!dashboard) return;
 
         // Update state
@@ -195,13 +248,9 @@ class DashboardHub {
         this.currentDashboard = dashboardId;
         this.saveState();
 
-        // Show loading state
-        this.showLoading(dashboard.title);
-
         // Update UI
         this.homepage.classList.add('hidden');
         this.dashboardView.classList.add('active');
-        this.homeButton.classList.add('visible');
 
         // Load the dashboard
         this.loadDashboard(dashboard);
@@ -211,62 +260,51 @@ class DashboardHub {
     }
 
     loadDashboard(dashboard) {
-        const iframe = this.dashboardContainer.querySelector('iframe');
+        // Hide all iframes
+        this.loadedDashboards.forEach(iframe => {
+            iframe.classList.remove('active');
+        });
 
-        // Use the embed URL directly from config (Publish to Web URL)
-        const embedUrl = dashboard.embedUrl;
-
-        // Check if we're switching dashboards (same container, different report)
-        if (iframe.src && iframe.src !== 'about:blank') {
-            // Fade transition for dashboard switch
-            iframe.style.opacity = '0';
-
-            setTimeout(() => {
-                iframe.src = embedUrl;
-            }, POWERBI_CONFIG.transitionDuration / 2);
+        // Check if we already have an iframe for this dashboard
+        if (this.loadedDashboards.has(dashboard.id)) {
+            const iframe = this.loadedDashboards.get(dashboard.id);
+            iframe.classList.add('active');
         } else {
-            iframe.src = embedUrl;
+            // Create new iframe
+            const iframe = document.createElement('iframe');
+            iframe.title = dashboard.title;
+
+            // Construct URL with pageName if applicable
+            let url = dashboard.embedUrl;
+            if (dashboard.pageName) {
+                const separator = url.includes('?') ? '&' : '?';
+                url += `${separator}pageName=${dashboard.pageName}`;
+            }
+
+            iframe.src = url;
+            iframe.allowFullscreen = true;
+            iframe.className = 'dashboard-iframe active';
+
+            this.dashboardContainer.appendChild(iframe);
+            this.loadedDashboards.set(dashboard.id, iframe);
         }
     }
 
-    onDashboardLoaded() {
-        const iframe = this.dashboardContainer.querySelector('iframe');
 
-        // Hide loading
-        this.hideLoading();
-
-        // Fade in iframe
-        setTimeout(() => {
-            iframe.style.opacity = '1';
-        }, 50);
-    }
-
-    showLoading(dashboardTitle) {
-        this.loadingText.textContent = `Loading ${dashboardTitle}...`;
-        this.dashboardLoading.classList.remove('hidden');
-    }
-
-    hideLoading() {
-        this.dashboardLoading.classList.add('hidden');
-    }
 
     goHome() {
-        // Fade out dashboard view
+        // Instant switch to home
         this.dashboardView.classList.remove('active');
-        this.homeButton.classList.remove('visible');
+        this.homepage.classList.remove('hidden');
 
-        // Clear iframe to stop any running reports
-        const iframe = this.dashboardContainer.querySelector('iframe');
-        iframe.src = 'about:blank';
-        iframe.style.opacity = '0';
+        // Hide all iframes instead of clearing source
+        this.loadedDashboards.forEach(iframe => {
+            iframe.classList.remove('active');
+        });
 
-        // Show homepage
-        setTimeout(() => {
-            this.homepage.classList.remove('hidden');
-            this.currentDashboard = null;
-            this.saveState();
-            this.updateSidebarHighlight();
-        }, POWERBI_CONFIG.transitionDuration);
+        this.currentDashboard = null;
+        this.saveState();
+        this.updateSidebarHighlight();
     }
 
     // ============================================
