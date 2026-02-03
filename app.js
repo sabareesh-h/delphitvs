@@ -23,6 +23,7 @@ class DashboardHub {
         this.categoriesContainer = document.getElementById('categories');
         this.sidebarContent = document.getElementById('sidebar-content');
         this.sidebarHomeTrigger = document.getElementById('sidebar-home-trigger');
+        this.fullscreenBtn = document.getElementById('fullscreen-btn');
 
         // Initialize
         this.init();
@@ -172,13 +173,35 @@ class DashboardHub {
             this.collapseSidebar(); // Optional: close sidebar when going home
         });
 
-        // Keyboard navigation
-        document.addEventListener('keydown', (e) => {
+        // Keyboard navigation (use window to capture even when iframe was focused)
+        window.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && this.currentDashboard) {
                 this.goHome();
             }
+
+            // F key to toggle fullscreen (only when viewing a dashboard and not typing)
+            if ((e.key === 'f' || e.key === 'F') && this.currentDashboard) {
+                const activeElement = document.activeElement;
+                const isTyping = activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA';
+                if (!isTyping) {
+                    e.preventDefault();
+                    this.toggleFullscreen();
+                }
+            }
         });
 
+        // Refocus document when mouse leaves iframe (allows keyboard shortcuts to work)
+        this.dashboardContainer.addEventListener('mouseleave', () => {
+            window.focus();
+        });
+
+        // Fullscreen toggle
+        this.fullscreenBtn.addEventListener('click', () => this.toggleFullscreen());
+
+        // Listen for fullscreen changes (including ESC key exit)
+        document.addEventListener('fullscreenchange', () => this.updateFullscreenButton());
+        document.addEventListener('webkitfullscreenchange', () => this.updateFullscreenButton());
+        document.addEventListener('msfullscreenchange', () => this.updateFullscreenButton());
 
     }
 
@@ -274,12 +297,16 @@ class DashboardHub {
             const iframe = document.createElement('iframe');
             iframe.title = dashboard.title;
 
-            // Construct URL with pageName if applicable
+            // Construct URL with parameters to hide bottom/side bars
             let url = dashboard.embedUrl;
+            const params = ['navContentPaneEnabled=false', 'filterPaneEnabled=false'];
+
             if (dashboard.pageName) {
-                const separator = url.includes('?') ? '&' : '?';
-                url += `${separator}pageName=${dashboard.pageName}`;
+                params.push(`pageName=${dashboard.pageName}`);
             }
+
+            const separator = url.includes('?') ? '&' : '?';
+            url += `${separator}${params.join('&')}`;
 
             iframe.src = url;
             iframe.allowFullscreen = true;
@@ -356,6 +383,46 @@ class DashboardHub {
             if (dashboardItem) {
                 dashboardItem.classList.add('active');
             }
+        }
+    }
+
+    // ============================================
+    // Fullscreen
+    // ============================================
+
+    toggleFullscreen() {
+        const elem = document.documentElement;
+
+        if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {
+            // Enter fullscreen
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen();
+            } else if (elem.webkitRequestFullscreen) {
+                elem.webkitRequestFullscreen();
+            } else if (elem.msRequestFullscreen) {
+                elem.msRequestFullscreen();
+            }
+        } else {
+            // Exit fullscreen
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) {
+                document.msExitFullscreen();
+            }
+        }
+    }
+
+    updateFullscreenButton() {
+        const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
+
+        if (isFullscreen) {
+            this.fullscreenBtn.classList.add('is-fullscreen');
+            this.fullscreenBtn.title = 'Exit Fullscreen';
+        } else {
+            this.fullscreenBtn.classList.remove('is-fullscreen');
+            this.fullscreenBtn.title = 'Toggle Fullscreen';
         }
     }
 

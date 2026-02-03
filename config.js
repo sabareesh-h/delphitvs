@@ -291,13 +291,8 @@ const DASHBOARD_CONFIG = {
                     title: "WIP Tracker",
                     purpose: "Current work-in-progress status",
                     embedUrl: "https://app.powerbi.com/view?r=YOUR_EMBED_TOKEN_HERE"
-                },
-                {
-                    id: "inventory_flow",
-                    title: "Inventory Flow",
-                    purpose: "Material movement and staging",
-                    embedUrl: "https://app.powerbi.com/view?r=YOUR_EMBED_TOKEN_HERE"
                 }
+
             ]
         },
         {
@@ -307,16 +302,35 @@ const DASHBOARD_CONFIG = {
             icon: "✅",
             dashboards: [
                 {
-                    id: "SAP Data",
+                    id: "sap_data_group",
                     title: "SAP Data",
-                    purpose: "Defect rates and quality trends",
-                    embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiODhmNzIxZWUtZjg5MS00ODcyLWE1MjctYzQyMDA5ZDFhZTFkIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9"
-                },
-                {
-                    id: "inspection_results",
-                    title: "Inspection Results",
-                    purpose: "Detailed inspection data analysis",
-                    embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiODhmNzIxZWUtZjg5MS00ODcyLWE1MjctYzQyMDA5ZDFhZTFkIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9"
+                    isGroup: true,
+                    dashboards: [
+                        {
+                            id: "sap_ctw",
+                            title: "CTW",
+                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiODhmNzIxZWUtZjg5MS00ODcyLWE1MjctYzQyMDA5ZDFhZTFkIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
+                            pageName: "66f4edb8c029c9fbfd7d"
+                        },
+                        {
+                            id: "sap_dispatch",
+                            title: "Dispatch",
+                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiODhmNzIxZWUtZjg5MS00ODcyLWE1MjctYzQyMDA5ZDFhZTFkIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
+                            pageName: "d3b099f02e52d1acc2b4"
+                        },
+                        {
+                            id: "sap_wh_stk",
+                            title: "WH Stk",
+                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiODhmNzIxZWUtZjg5MS00ODcyLWE1MjctYzQyMDA5ZDFhZTFkIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
+                            pageName: "d20be3c5cd3ec267659a"
+                        },
+                        {
+                            id: "sap_comparison",
+                            title: "Comparison: SAP & Logbook",
+                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiODhmNzIxZWUtZjg5MS00ODcyLWE1MjctYzQyMDA5ZDFhZTFkIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
+                            pageName: "5609698d62ad0e9c748e"
+                        }
+                    ]
                 }
             ]
         }
