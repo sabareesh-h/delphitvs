@@ -549,7 +549,7 @@ class DashboardHub {
             const isTyping = activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA';
             if (isTyping) return;
 
-            if (e.key === 'p' || e.key === 'P') {
+            if (e.key === 'w' || e.key === 'W') {
                 e.preventDefault();
                 this.togglePen();
             } else if (e.key === 'e' || e.key === 'E') {
