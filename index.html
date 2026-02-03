@@ -53,6 +53,42 @@
 
     <!-- Dashboard View (Full-screen Power BI embed) -->
     <div class="dashboard-view" id="dashboard-view">
+      <!-- Annotation Canvas Overlay -->
+      <canvas class="annotation-canvas" id="annotation-canvas"></canvas>
+
+      <!-- Annotation Toolbar -->
+      <div class="annotation-toolbar" id="annotation-toolbar">
+        <button class="annotation-btn annotation-btn--pen" id="pen-toggle" title="Toggle Pen (P)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
+            <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
+            <path d="M2 2l7.586 7.586"></path>
+            <circle cx="11" cy="11" r="2"></circle>
+          </svg>
+        </button>
+        <button class="annotation-btn annotation-btn--eraser" id="eraser-btn" title="Eraser (E)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 20H7L3 16c-.8-.8-.8-2 0-2.8L13.6 2.6c.8-.8 2-.8 2.8 0L21 7.2c.8.8.8 2 0 2.8L12 19"></path>
+          </svg>
+        </button>
+        <div class="annotation-colors" id="annotation-colors">
+          <button class="color-swatch active" data-color="#FF0000" style="background:#FF0000" title="Red"></button>
+          <button class="color-swatch" data-color="#00AA00" style="background:#00AA00" title="Green"></button>
+          <button class="color-swatch" data-color="#0066FF" style="background:#0066FF" title="Blue"></button>
+          <button class="color-swatch" data-color="#FFD700" style="background:#FFD700" title="Yellow"></button>
+          <button class="color-swatch" data-color="#000000" style="background:#000000" title="Black"></button>
+        </div>
+        <button class="annotation-btn annotation-btn--clear" id="clear-btn" title="Clear All (C)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+        </button>
+      </div>
+
       <!-- Fullscreen Toggle Button -->
       <button class="fullscreen-btn" id="fullscreen-btn" title="Toggle Fullscreen">
         <svg class="fullscreen-icon-expand" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"

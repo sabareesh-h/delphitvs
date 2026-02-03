@@ -25,6 +25,22 @@ class DashboardHub {
         this.sidebarHomeTrigger = document.getElementById('sidebar-home-trigger');
         this.fullscreenBtn = document.getElementById('fullscreen-btn');
 
+        // Annotation elements
+        this.annotationCanvas = document.getElementById('annotation-canvas');
+        this.annotationCtx = this.annotationCanvas.getContext('2d');
+        this.penToggle = document.getElementById('pen-toggle');
+        this.eraserBtn = document.getElementById('eraser-btn');
+        this.clearBtn = document.getElementById('clear-btn');
+        this.colorSwatches = document.querySelectorAll('.color-swatch');
+
+        // Annotation state
+        this.isDrawing = false;
+        this.isPenActive = false;
+        this.isEraserMode = false;
+        this.penColor = '#FF0000';
+        this.penWidth = 3;
+        this.eraserWidth = 20;
+
         // Initialize
         this.init();
     }
@@ -34,6 +50,8 @@ class DashboardHub {
         this.renderSidebar();
         this.bindEvents();
         this.restoreState();
+        this.setupCanvas();
+        this.bindAnnotationEvents();
     }
 
     // ============================================
@@ -465,6 +483,141 @@ class DashboardHub {
         } catch (e) {
             console.warn('Failed to restore state:', e);
         }
+    }
+
+    // ============================================
+    // Annotation Tool
+    // ============================================
+
+    setupCanvas() {
+        // Match canvas size to viewport
+        const resize = () => {
+            this.annotationCanvas.width = window.innerWidth;
+            this.annotationCanvas.height = window.innerHeight;
+        };
+        resize();
+        window.addEventListener('resize', resize);
+    }
+
+    bindAnnotationEvents() {
+        // Pen toggle
+        this.penToggle.addEventListener('click', () => this.togglePen());
+
+        // Eraser
+        this.eraserBtn.addEventListener('click', () => this.toggleEraser());
+
+        // Clear
+        this.clearBtn.addEventListener('click', () => this.clearCanvas());
+
+        // Color swatches
+        this.colorSwatches.forEach(swatch => {
+            swatch.addEventListener('click', () => {
+                this.colorSwatches.forEach(s => s.classList.remove('active'));
+                swatch.classList.add('active');
+                this.penColor = swatch.dataset.color;
+                // Switch to pen mode when selecting a color
+                if (!this.isPenActive) {
+                    this.togglePen();
+                } else if (this.isEraserMode) {
+                    this.isEraserMode = false;
+                    this.eraserBtn.classList.remove('active');
+                }
+            });
+        });
+
+        // Canvas drawing events
+        this.annotationCanvas.addEventListener('mousedown', (e) => this.startDrawing(e));
+        this.annotationCanvas.addEventListener('mousemove', (e) => this.draw(e));
+        this.annotationCanvas.addEventListener('mouseup', () => this.stopDrawing());
+        this.annotationCanvas.addEventListener('mouseleave', () => this.stopDrawing());
+
+        // Touch support
+        this.annotationCanvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            this.startDrawing(e.touches[0]);
+        });
+        this.annotationCanvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            this.draw(e.touches[0]);
+        });
+        this.annotationCanvas.addEventListener('touchend', () => this.stopDrawing());
+
+        // Keyboard shortcuts for annotation
+        window.addEventListener('keydown', (e) => {
+            if (!this.currentDashboard) return;
+            const activeElement = document.activeElement;
+            const isTyping = activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA';
+            if (isTyping) return;
+
+            if (e.key === 'p' || e.key === 'P') {
+                e.preventDefault();
+                this.togglePen();
+            } else if (e.key === 'e' || e.key === 'E') {
+                e.preventDefault();
+                this.toggleEraser();
+            } else if (e.key === 'c' || e.key === 'C') {
+                e.preventDefault();
+                this.clearCanvas();
+            }
+        });
+    }
+
+    togglePen() {
+        this.isPenActive = !this.isPenActive;
+        this.penToggle.classList.toggle('active', this.isPenActive);
+        this.annotationCanvas.classList.toggle('active', this.isPenActive);
+
+        if (this.isPenActive) {
+            this.isEraserMode = false;
+            this.eraserBtn.classList.remove('active');
+        }
+    }
+
+    toggleEraser() {
+        if (!this.isPenActive) {
+            this.isPenActive = true;
+            this.penToggle.classList.add('active');
+            this.annotationCanvas.classList.add('active');
+        }
+        this.isEraserMode = !this.isEraserMode;
+        this.eraserBtn.classList.toggle('active', this.isEraserMode);
+    }
+
+    clearCanvas() {
+        this.annotationCtx.clearRect(0, 0, this.annotationCanvas.width, this.annotationCanvas.height);
+    }
+
+    startDrawing(e) {
+        this.isDrawing = true;
+        this.annotationCtx.beginPath();
+        this.annotationCtx.moveTo(e.clientX, e.clientY);
+    }
+
+    draw(e) {
+        if (!this.isDrawing) return;
+
+        const ctx = this.annotationCtx;
+
+        if (this.isEraserMode) {
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.lineWidth = this.eraserWidth;
+        } else {
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.strokeStyle = this.penColor;
+            ctx.lineWidth = this.penWidth;
+        }
+
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineTo(e.clientX, e.clientY);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(e.clientX, e.clientY);
+    }
+
+    stopDrawing() {
+        this.isDrawing = false;
+        this.annotationCtx.beginPath();
     }
 }
 
