@@ -65,7 +65,7 @@ class DashboardHub {
         this.restoreState();
         this.setupCanvas();
         this.bindAnnotationEvents();
-        this.loadAllComments();
+        // this.loadAllComments(); // Removed to prevent double loading and blocking in constructor
         this.bindCommentEvents();
     }
 
@@ -1410,15 +1410,20 @@ class AuthManager {
         // Create fresh dashboard hub for new user
         window.dashboardHub = new DashboardHub();
 
-        // Fetch roles from Google Sheets before rendering
-        await window.dashboardHub.fetchSheetRoles();
+        // Fetch roles from Google Sheets in background
+        window.dashboardHub.fetchSheetRoles().then(() => {
+            // Re-render once roles are truly loaded (in case they differ from fallback)
+            console.log('Roles refreshed, updating view...');
+            window.dashboardHub.renderCategories();
+            window.dashboardHub.renderSidebar();
+        });
 
-        // Load comments
-        await window.dashboardHub.loadAllComments();
-
-        // Re-render with correct roles
+        // Immediate render with fallback/cached roles (Optimistic UI)
         window.dashboardHub.renderCategories();
         window.dashboardHub.renderSidebar();
+
+        // Load comments in background (non-blocking)
+        window.dashboardHub.loadAllComments();
     }
 
     updateUserDisplay() {
