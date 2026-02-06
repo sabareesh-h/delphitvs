@@ -40,6 +40,14 @@ const AUTH_CONFIG = {
 };
 
 // ============================================
+// GOOGLE SHEETS COMMENTS
+// ============================================
+// Comments are stored in Google Sheets for cross-user sync
+
+const COMMENTS_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRAkB0yim6v6qUBf0S9AlfyIlngJeh4qdv3pgbzxIZ7ddF6sKGKK8cou6UKzarf-bttuy-keJfB5BHW/pub?output=csv';  // Reading
+const COMMENTS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzP6U2viuiNmq293m4xRhEASXilNvtqJIQAq6OUAn3Me7ZOtKeUGOLHmaZa9SKR4UncWg/exec';  // Writing
+
+// ============================================
 // ROLE-BASED ACCESS CONTROL
 // ============================================
 // User roles are fetched from Google Sheets for easy management
@@ -54,7 +62,7 @@ const ENCODED_ROLES = 'eyJoc2gucGVkQGRlbHBoaXR2cy5jb20iOlsiYWRtaW4iXSwibWFoLnBlZ
 // Cache for roles fetched from sheet
 let SHEET_ROLES = null;
 let ROLES_FETCH_TIME = 0;
-const ROLES_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
+const ROLES_CACHE_DURATION = 1 * 60 * 1000; // 1 minute cache (roles update quickly)
 
 // Decode fallback roles
 const FALLBACK_ROLES = (() => {
@@ -75,6 +83,7 @@ const DASHBOARD_CONFIG = {
             name: "Production",
             description: "Production metrics and line performance",
             icon: "📊",
+            requiredRoles: ['production'],  // Restricted - only production role can see
             dashboards: [
                 {
                     id: "nozzle_group",

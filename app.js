@@ -492,6 +492,8 @@ class DashboardHub {
 
 
     goHome() {
+        this.currentDashboard = null; // Reset selection
+
         // Instant switch to home
         this.dashboardView.classList.remove('active');
         this.homepage.classList.remove('hidden');
@@ -820,6 +822,110 @@ class DashboardHub {
         });
     }
 
+    renderComments() {
+        if (!this.commentList || !this.commentEmpty) return;
+
+        if (!this.currentDashboard) {
+            this.commentList.innerHTML = '';
+            this.commentList.appendChild(this.commentEmpty);
+            this.commentEmpty.classList.remove('hidden');
+            this.updateCommentBadge(0);
+            return;
+        }
+
+        const comments = this.comments[this.currentDashboard] || [];
+        const html = comments.map(comment => this.renderCommentItem(comment)).join('');
+
+        this.commentList.innerHTML = html;
+        this.commentList.appendChild(this.commentEmpty);
+
+        const totalCount = comments.reduce((count, comment) => {
+            const repliesCount = Array.isArray(comment.replies) ? comment.replies.length : 0;
+            return count + 1 + repliesCount;
+        }, 0);
+
+        this.updateCommentBadge(totalCount);
+        this.commentEmpty.classList.toggle('hidden', comments.length > 0);
+    }
+
+    renderCommentItem(comment, isReply = false) {
+        const safeText = this.escapeHtml(comment.text || '').replace(/\n/g, '<br>');
+        const author = this.escapeHtml(comment.author || 'Anonymous');
+        const timeAgo = this.getTimeAgo(comment.timestamp || Date.now());
+        const initials = this.getInitials(comment.author || 'A');
+
+        const actions = isReply
+            ? ''
+            : `
+          <div class="comment-item__actions">
+            <button class="comment-item__action" data-action="reply" data-comment-id="${comment.id}">Reply</button>
+          </div>
+        `;
+
+        const replyForm = isReply ? '' : this.renderReplyForm(comment.id);
+
+        const repliesHtml = (!isReply && Array.isArray(comment.replies) && comment.replies.length > 0)
+            ? `
+          <div class="comment-reply">
+            ${comment.replies.map(reply => this.renderCommentItem(reply, true)).join('')}
+          </div>
+        `
+            : '';
+
+        return `
+        <div class="comment-item" data-comment-id="${comment.id}">
+          <div class="comment-item__header">
+            <div class="comment-item__avatar">${initials}</div>
+            <div class="comment-item__meta">
+              <div class="comment-item__author">${author}</div>
+              <div class="comment-item__time">${timeAgo}</div>
+            </div>
+          </div>
+          <div class="comment-item__text">${safeText}</div>
+          ${actions}
+        </div>
+        ${replyForm}
+        ${repliesHtml}
+      `;
+    }
+
+    renderReplyForm(commentId) {
+        return `
+        <div class="comment-reply-form" id="reply-form-${commentId}">
+          <div class="comment-form__input-wrapper">
+            <input type="text" class="comment-form__input" id="reply-input-${commentId}" placeholder="Write a reply..." autocomplete="off">
+            <button type="button" class="comment-form__submit reply-submit-btn" data-comment-id="${commentId}" title="Send">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+            </button>
+            <button type="button" class="comment-item__action reply-cancel-btn" data-comment-id="${commentId}">Cancel</button>
+          </div>
+        </div>
+      `;
+    }
+
+    showReplyForm(commentId) {
+        const openForms = this.commentList.querySelectorAll('.comment-reply-form.active');
+        openForms.forEach(form => form.classList.remove('active'));
+
+        const form = this.commentList.querySelector(`#reply-form-${commentId}`);
+        if (form) {
+            form.classList.add('active');
+            const input = form.querySelector('input');
+            if (input) input.focus();
+        }
+    }
+
+    updateCommentBadge(count) {
+        if (!this.commentBadge) return;
+        const safeCount = Number.isFinite(count) ? count : 0;
+        this.commentBadge.textContent = safeCount;
+        this.commentBadge.setAttribute('data-count', String(safeCount));
+    }
+
     expandCommentPanel() {
         this.isCommentPanelExpanded = true;
         this.commentPanel.classList.add('expanded');
@@ -830,126 +936,130 @@ class DashboardHub {
         this.commentPanel.classList.remove('expanded');
     }
 
-    loadAllComments() {
+    async loadAllComments() {
         try {
-            const saved = localStorage.getItem('dashboardComments');
-            if (saved) {
-                this.comments = JSON.parse(saved);
+            const response = await fetch(COMMENTS_SHEET_URL);
+            if (!response.ok) throw new Error('Failed to fetch comments');
+
+            const csv = await response.text();
+            this.comments = this.parseCommentsCSV(csv);
+            if (this.currentDashboard) {
+                this.renderComments();
             }
         } catch (e) {
             console.warn('Failed to load comments:', e);
             this.comments = {};
+            if (this.currentDashboard) {
+                this.renderComments();
+            }
         }
     }
 
-    saveAllComments() {
+    parseCommentsCSV(csv) {
+        const commentsByDashboard = {};
+        const lines = csv.split('\n');
+
+        // Skip header
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+
+            // Simple CSV parse (robust enough for our usage)
+            // Format: id, dashboardId, author, text, timestamp, parentId
+            const parts = line.split(',');
+            if (parts.length < 5) continue;
+
+            const id = parts[0];
+            const dashboardId = parts[1];
+            const author = parts[2];
+            // Reassemble text if it contained commas
+            const parentId = parts[parts.length - 1];
+            const timestamp = parseInt(parts[parts.length - 2]);
+            const text = parts.slice(3, parts.length - 2).join(',').replace(/^"|"$/g, '');
+
+            const comment = { id, author, text, timestamp, replies: [] };
+
+            if (!commentsByDashboard[dashboardId]) {
+                commentsByDashboard[dashboardId] = [];
+            }
+
+            if (parentId && parentId.trim()) {
+                // It's a reply - store temporarily to link later
+                // For simplicity in this append-only model, we'll scan linearly
+                // This logic implies we need a second pass or structured storage
+                comment.parentId = parentId.trim();
+                commentsByDashboard[dashboardId].push(comment);
+            } else {
+                commentsByDashboard[dashboardId].push(comment);
+            }
+        }
+
+        // Reconstruct hierarchy (replies)
+        for (const dashId in commentsByDashboard) {
+            const all = commentsByDashboard[dashId];
+            const root = [];
+            const map = new Map();
+
+            // Map all for lookup
+            all.forEach(c => map.set(c.id, c));
+
+            all.forEach(c => {
+                if (c.parentId && map.has(c.parentId)) {
+                    const parent = map.get(c.parentId);
+                    if (!parent.replies) parent.replies = [];
+                    parent.replies.push(c);
+                } else if (!c.parentId) {
+                    root.push(c);
+                }
+            });
+
+            // Sort by timestamp
+            root.sort((a, b) => b.timestamp - a.timestamp);
+            root.forEach(c => c.replies.sort((a, b) => a.timestamp - b.timestamp));
+
+            commentsByDashboard[dashId] = root;
+        }
+
+        return commentsByDashboard;
+    }
+
+    async saveCommentToSheet(comment, dashboardId, parentId = '') {
         try {
-            localStorage.setItem('dashboardComments', JSON.stringify(this.comments));
+            const data = {
+                id: comment.id,
+                dashboardId: dashboardId,
+                author: comment.author,
+                text: comment.text,
+                timestamp: comment.timestamp,
+                parentId: parentId
+            };
+
+            // Use text/plain to avoid CORS preflight, Apps Script handles it fine
+            await fetch(COMMENTS_SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: {
+                    'Content-Type': 'text/plain'
+                },
+                body: JSON.stringify(data)
+            });
         } catch (e) {
-            console.warn('Failed to save comments:', e);
+            console.error('Failed to save comment:', e);
+            alert('Failed to post comment. Check console for details.');
         }
     }
 
-    getCommentsForCurrentDashboard() {
-        if (!this.currentDashboard) return [];
-        return this.comments[this.currentDashboard] || [];
-    }
+    // Remove localStorage save/load
+    saveAllComments() { /* No-op */ }
 
-    renderComments() {
-        const comments = this.getCommentsForCurrentDashboard();
+    async submitComment() {
+        const text = this.commentInput.value.trim();
+        if (!text) return;
 
-        // Update badge
-        const totalCount = comments.reduce((acc, c) => acc + 1 + (c.replies?.length || 0), 0);
-        this.commentBadge.textContent = totalCount;
-        this.commentBadge.setAttribute('data-count', totalCount);
-
-        // Show/hide empty state
-        if (comments.length === 0) {
-            this.commentEmpty.classList.remove('hidden');
-            // Remove any existing comment items
-            this.commentList.querySelectorAll('.comment-item, .comment-reply').forEach(el => el.remove());
+        if (!this.currentDashboard) {
+            alert('Please open a dashboard to comment.');
             return;
         }
-
-        this.commentEmpty.classList.add('hidden');
-
-        // Build comments HTML
-        const html = comments.map(comment => this.renderCommentItem(comment)).join('');
-
-        // Keep empty state element but update rest
-        this.commentList.innerHTML = `
-            <div class="comment-empty hidden" id="comment-empty">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                </svg>
-                <p>No comments yet</p>
-                <span>Start a discussion about this dashboard</span>
-            </div>
-            ${html}
-        `;
-        this.commentEmpty = document.getElementById('comment-empty');
-    }
-
-    renderCommentItem(comment, isReply = false) {
-        const initials = this.getInitials(comment.author);
-        const timeAgo = this.getTimeAgo(comment.timestamp);
-
-        const repliesHtml = (comment.replies || []).map(reply =>
-            `<div class="comment-reply">${this.renderCommentItem(reply, true)}</div>`
-        ).join('');
-
-        const replyFormHtml = !isReply ? `
-            <div class="comment-reply-form" id="reply-form-${comment.id}">
-                <div class="comment-form__input-wrapper">
-                    <input type="text" class="comment-form__input" id="reply-input-${comment.id}" placeholder="Write a reply..." autocomplete="off">
-                    <button type="button" class="reply-cancel-btn comment-item__action" style="padding: 6px 8px;">Cancel</button>
-                    <button type="button" class="reply-submit-btn comment-form__submit" data-comment-id="${comment.id}" title="Send Reply">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="22" y1="2" x2="11" y2="13"></line>
-                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-        ` : '';
-
-        return `
-            <div class="comment-item" data-comment-id="${comment.id}">
-                <div class="comment-item__header">
-                    <div class="comment-item__avatar">${initials}</div>
-                    <div class="comment-item__meta">
-                        <div class="comment-item__author">${this.escapeHtml(comment.author)}</div>
-                        <div class="comment-item__time">${timeAgo}</div>
-                    </div>
-                </div>
-                <div class="comment-item__text">${this.escapeHtml(comment.text)}</div>
-                <div class="comment-item__actions">
-                    ${!isReply ? `<button class="comment-item__action" data-action="reply" data-comment-id="${comment.id}">Reply</button>` : ''}
-                    <button class="comment-item__action" data-action="delete" data-comment-id="${comment.id}" ${isReply ? `data-parent-id="${comment.parentId}"` : ''}>Delete</button>
-                </div>
-                ${replyFormHtml}
-                ${repliesHtml}
-            </div>
-        `;
-    }
-
-    showReplyForm(commentId) {
-        // Hide all other reply forms
-        this.commentList.querySelectorAll('.comment-reply-form.active').forEach(el => {
-            el.classList.remove('active');
-        });
-
-        const replyForm = document.getElementById(`reply-form-${commentId}`);
-        if (replyForm) {
-            replyForm.classList.add('active');
-            const input = document.getElementById(`reply-input-${commentId}`);
-            if (input) input.focus();
-        }
-    }
-
-    submitComment() {
-        const text = this.commentInput.value.trim();
-        if (!text || !this.currentDashboard) return;
 
         const comment = {
             id: this.generateId(),
@@ -959,17 +1069,19 @@ class DashboardHub {
             replies: []
         };
 
+        // Optimistic UI update
         if (!this.comments[this.currentDashboard]) {
             this.comments[this.currentDashboard] = [];
         }
-
-        this.comments[this.currentDashboard].push(comment);
-        this.saveAllComments();
+        this.comments[this.currentDashboard].unshift(comment);
         this.renderComments();
         this.commentInput.value = '';
+
+        // Background save
+        await this.saveCommentToSheet(comment, this.currentDashboard);
     }
 
-    submitReply(parentCommentId, text) {
+    async submitReply(parentCommentId, text) {
         if (!text || !this.currentDashboard) return;
 
         const comments = this.comments[this.currentDashboard] || [];
@@ -979,7 +1091,7 @@ class DashboardHub {
 
         const reply = {
             id: this.generateId(),
-            parentId: parentCommentId,
+            parentId: parentCommentId, // internal use
             author: this.getCurrentUser(),
             text: text,
             timestamp: Date.now()
@@ -989,29 +1101,17 @@ class DashboardHub {
             parentComment.replies = [];
         }
 
+        // Optimistic UI update
         parentComment.replies.push(reply);
-        this.saveAllComments();
         this.renderComments();
+
+        // Background save
+        await this.saveCommentToSheet(reply, this.currentDashboard, parentCommentId);
     }
 
     deleteComment(commentId, parentId = null) {
-        if (!this.currentDashboard) return;
-
-        const comments = this.comments[this.currentDashboard] || [];
-
-        if (parentId) {
-            // Delete a reply
-            const parentComment = comments.find(c => c.id === parentId);
-            if (parentComment && parentComment.replies) {
-                parentComment.replies = parentComment.replies.filter(r => r.id !== commentId);
-            }
-        } else {
-            // Delete a top-level comment
-            this.comments[this.currentDashboard] = comments.filter(c => c.id !== commentId);
-        }
-
-        this.saveAllComments();
-        this.renderComments();
+        alert("Deletion is not supported in the shared sheet yet.");
+        // To support deletion we'd need a more complex backend or 'soft delete' flags
     }
 
     // Helper methods
@@ -1020,17 +1120,13 @@ class DashboardHub {
     }
 
     getCurrentUser() {
-        // In a real app, this would come from authentication
-        // For now, use a stored name or prompt
-        let userName = localStorage.getItem('commentUserName');
-        if (!userName) {
-            userName = prompt('Enter your name for comments:', 'Manager') || 'Anonymous';
-            localStorage.setItem('commentUserName', userName);
-        }
-        return userName;
+        // Use authenticated user
+        const user = window.authManager?.getUser();
+        return user ? (user.name || user.email) : 'Anonymous';
     }
 
     getInitials(name) {
+        if (!name) return 'A';
         return name
             .split(' ')
             .map(n => n[0])
@@ -1288,6 +1384,10 @@ class AuthManager {
             google.accounts.id.disableAutoSelect();
         }
 
+        // Clear role cache so next user gets fresh roles
+        SHEET_ROLES = null;
+        ROLES_FETCH_TIME = 0;
+
         // Destroy dashboard hub so new user gets fresh view
         if (window.dashboardHub) {
             window.dashboardHub = null;
@@ -1312,6 +1412,9 @@ class AuthManager {
 
         // Fetch roles from Google Sheets before rendering
         await window.dashboardHub.fetchSheetRoles();
+
+        // Load comments
+        await window.dashboardHub.loadAllComments();
 
         // Re-render with correct roles
         window.dashboardHub.renderCategories();
