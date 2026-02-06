@@ -14,6 +14,60 @@
  * 5. Set this value as "pageName" in the dashboard object settings.
  */
 
+// ============================================
+// AUTHENTICATION CONFIGURATION
+// ============================================
+// To get your Google Client ID:
+// 1. Go to https://console.cloud.google.com/
+// 2. Create a new project or select existing
+// 3. Go to APIs & Services > Credentials
+// 4. Create OAuth 2.0 Client ID (Web application)
+// 5. Add http://localhost to Authorized JavaScript origins
+// 6. Copy the Client ID and paste below
+
+const AUTH_CONFIG = {
+    // REPLACE THIS with your actual Google OAuth Client ID
+    GOOGLE_CLIENT_ID: '388932861013-idhpmmea0fg17t5sf00drm135717du68.apps.googleusercontent.com',
+
+    // Only allow emails from this domain
+    ALLOWED_DOMAIN: 'delphitvs.com',
+
+    // Company name for display
+    COMPANY_NAME: 'Delphi TVS',
+
+    // Session duration in milliseconds (24 hours)
+    SESSION_DURATION: 24 * 60 * 60 * 1000
+};
+
+// ============================================
+// ROLE-BASED ACCESS CONTROL
+// ============================================
+// User roles are fetched from Google Sheets for easy management
+// Fallback to encoded roles if Sheet is unavailable
+
+// Google Sheets published CSV URL (edit the sheet to manage users)
+const ROLES_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSUoajlzLmEK735CeMDox10NhLHMBQ-y6GBDx4C0Xa23r5k8QNY1e3kJwL6tH0HYA8EH4IoLVJ08rd-/pub?output=csv';
+
+// Fallback encoded roles (used if Sheet is unavailable)
+const ENCODED_ROLES = 'eyJoc2gucGVkQGRlbHBoaXR2cy5jb20iOlsiYWRtaW4iXSwibWFoLnBlZEBkZWxwaGl0dnMuY29tIjpbInByb2R1Y3Rpb24iXX0=';
+
+// Cache for roles fetched from sheet
+let SHEET_ROLES = null;
+let ROLES_FETCH_TIME = 0;
+const ROLES_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
+
+// Decode fallback roles
+const FALLBACK_ROLES = (() => {
+    try {
+        return JSON.parse(atob(ENCODED_ROLES));
+    } catch (e) {
+        return {};
+    }
+})();
+
+// Default role for users not in the list
+const DEFAULT_ROLE = ['viewer'];
+
 const DASHBOARD_CONFIG = {
     categories: [
         {
@@ -265,6 +319,7 @@ const DASHBOARD_CONFIG = {
             name: "Cost",
             description: "Cost drivers and loss analysis",
             icon: "💰",
+            requiredRoles: ['cost', 'finance'],  // Restricted - not visible to production role
             dashboards: [
                 {
                     id: "cost_overview",
@@ -285,6 +340,7 @@ const DASHBOARD_CONFIG = {
             name: "WIP",
             description: "Work in progress tracking",
             icon: "🔄",
+            requiredRoles: ['wip', 'operations'],  // Restricted - not visible to production role
             dashboards: [
                 {
                     id: "wip_tracker",
@@ -300,6 +356,7 @@ const DASHBOARD_CONFIG = {
             name: "Accuracy",
             description: "Quality and accuracy metrics",
             icon: "✅",
+            requiredRoles: ['sap', 'accuracy'],  // Restricted - SAP data, not visible to production role
             dashboards: [
                 {
                     id: "sap_data_group",

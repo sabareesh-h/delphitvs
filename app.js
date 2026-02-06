@@ -41,6 +41,19 @@ class DashboardHub {
         this.penWidth = 3;
         this.eraserWidth = 20;
 
+        // Comment panel elements
+        this.commentPanel = document.getElementById('comment-panel');
+        this.commentContent = document.getElementById('comment-content');
+        this.commentList = document.getElementById('comment-list');
+        this.commentEmpty = document.getElementById('comment-empty');
+        this.commentForm = document.getElementById('comment-form');
+        this.commentInput = document.getElementById('comment-input');
+        this.commentBadge = document.getElementById('comment-badge');
+
+        // Comment state
+        this.comments = {}; // Store comments per dashboard
+        this.isCommentPanelExpanded = false;
+
         // Initialize
         this.init();
     }
@@ -52,6 +65,140 @@ class DashboardHub {
         this.restoreState();
         this.setupCanvas();
         this.bindAnnotationEvents();
+        this.loadAllComments();
+        this.bindCommentEvents();
+    }
+
+    // ============================================
+    // Role-Based Access Control
+    // ============================================
+
+    // Fetch roles from Google Sheets (cached)
+    async fetchSheetRoles() {
+        const now = Date.now();
+
+        // Return cached roles if still valid
+        if (SHEET_ROLES && (now - ROLES_FETCH_TIME) < ROLES_CACHE_DURATION) {
+            return SHEET_ROLES;
+        }
+
+        try {
+            const response = await fetch(ROLES_SHEET_URL);
+            if (!response.ok) throw new Error('Failed to fetch');
+
+            const csv = await response.text();
+            const roles = this.parseCSVToRoles(csv);
+
+            // Cache the results
+            SHEET_ROLES = roles;
+            ROLES_FETCH_TIME = now;
+
+            return roles;
+        } catch (error) {
+            // Fallback to encoded roles
+            return FALLBACK_ROLES;
+        }
+    }
+
+    // Parse CSV to roles object
+    parseCSVToRoles(csv) {
+        const roles = {};
+        const lines = csv.split('\n');
+
+        // Skip header row
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+
+            // Parse CSV (handle quoted values)
+            const parts = line.split(',');
+            if (parts.length >= 2) {
+                const email = parts[0].replace(/"/g, '').trim().toLowerCase();
+                const rolesStr = parts[1].replace(/"/g, '').trim();
+
+                if (email && rolesStr) {
+                    // Support comma-separated roles within the cell
+                    roles[email] = rolesStr.split(/[,;]/).map(r => r.trim()).filter(r => r);
+                }
+            }
+        }
+
+        return roles;
+    }
+
+    getUserRoles() {
+        const user = window.authManager?.getUser();
+        if (!user || !user.email) {
+            return DEFAULT_ROLE;
+        }
+
+        // Case-insensitive email lookup
+        const userEmailLower = user.email.toLowerCase();
+
+        // Use cached sheet roles or fallback
+        const rolesSource = SHEET_ROLES || FALLBACK_ROLES;
+
+        for (const [email, roles] of Object.entries(rolesSource)) {
+            if (email.toLowerCase() === userEmailLower) {
+                return roles;
+            }
+        }
+        return DEFAULT_ROLE;
+    }
+
+    hasRole(requiredRoles) {
+        const userRoles = this.getUserRoles();
+
+        // Admin can see everything
+        if (userRoles.includes('admin')) {
+            return true;
+        }
+
+        // No required roles means everyone can see it
+        if (!requiredRoles || requiredRoles.length === 0) return true;
+
+        // Check if user has any of the required roles
+        const roles = Array.isArray(requiredRoles) ? requiredRoles : [requiredRoles];
+        return roles.some(role => userRoles.includes(role));
+    }
+
+    canAccessDashboard(dashboard) {
+        return this.hasRole(dashboard.requiredRoles);
+    }
+
+    filterDashboards(dashboards) {
+        return dashboards.filter(dashboard => {
+            if (dashboard.isGroup) {
+                // For groups, filter sub-dashboards
+                const accessibleSubs = dashboard.dashboards.filter(d => this.canAccessDashboard(d));
+                return accessibleSubs.length > 0;
+            }
+            return this.canAccessDashboard(dashboard);
+        });
+    }
+
+    getFilteredConfig() {
+        return DASHBOARD_CONFIG.categories.map(category => {
+            // Filter category-level first
+            if (!this.hasRole(category.requiredRoles)) return null;
+
+            let filteredDashboards = this.filterDashboards(category.dashboards);
+
+            // For groups, also filter internal dashboards
+            filteredDashboards = filteredDashboards.map(d => {
+                if (d.isGroup) {
+                    return {
+                        ...d,
+                        dashboards: d.dashboards.filter(sub => this.canAccessDashboard(sub))
+                    };
+                }
+                return d;
+            });
+
+            if (filteredDashboards.length === 0) return null;
+
+            return { ...category, dashboards: filteredDashboards };
+        }).filter(c => c !== null);
     }
 
     // ============================================
@@ -59,7 +206,9 @@ class DashboardHub {
     // ============================================
 
     renderCategories() {
-        this.categoriesContainer.innerHTML = DASHBOARD_CONFIG.categories.map(category => `
+        const categories = this.getFilteredConfig();
+
+        this.categoriesContainer.innerHTML = categories.map(category => `
       <div class="category-tile" data-category="${category.id}">
         <div class="category-header" data-category-id="${category.id}">
           <div class="category-icon">${category.icon}</div>
@@ -103,7 +252,9 @@ class DashboardHub {
     }
 
     renderSidebar() {
-        this.sidebarContent.innerHTML = DASHBOARD_CONFIG.categories.map(category => `
+        const categories = this.getFilteredConfig();
+
+        this.sidebarContent.innerHTML = categories.map(category => `
       <div class="sidebar-category" data-category="${category.id}">
         <div class="sidebar-category__header" data-category-id="${category.id}">
           <span class="sidebar-category__icon">${category.icon}</span>
@@ -298,6 +449,9 @@ class DashboardHub {
 
         // Update sidebar highlighting
         this.updateSidebarHighlight();
+
+        // Load comments for this dashboard
+        this.renderComments();
     }
 
     loadDashboard(dashboard) {
@@ -619,9 +773,605 @@ class DashboardHub {
         this.isDrawing = false;
         this.annotationCtx.beginPath();
     }
+
+    // ============================================
+    // Comment Panel
+    // ============================================
+
+    bindCommentEvents() {
+        // Submit comment
+        this.commentForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.submitComment();
+        });
+
+        // Handle reply clicks and delete
+        this.commentList.addEventListener('click', (e) => {
+            const replyBtn = e.target.closest('.comment-item__action[data-action="reply"]');
+            const deleteBtn = e.target.closest('.comment-item__action[data-action="delete"]');
+            const submitReplyBtn = e.target.closest('.reply-submit-btn');
+            const cancelReplyBtn = e.target.closest('.reply-cancel-btn');
+
+            if (replyBtn) {
+                const commentId = replyBtn.dataset.commentId;
+                this.showReplyForm(commentId);
+            }
+
+            if (deleteBtn) {
+                const commentId = deleteBtn.dataset.commentId;
+                const parentId = deleteBtn.dataset.parentId || null;
+                this.deleteComment(commentId, parentId);
+            }
+
+            if (submitReplyBtn) {
+                const commentId = submitReplyBtn.dataset.commentId;
+                const input = this.commentList.querySelector(`#reply-input-${commentId}`);
+                if (input && input.value.trim()) {
+                    this.submitReply(commentId, input.value.trim());
+                }
+            }
+
+            if (cancelReplyBtn) {
+                const replyForm = cancelReplyBtn.closest('.comment-reply-form');
+                if (replyForm) {
+                    replyForm.classList.remove('active');
+                }
+            }
+        });
+    }
+
+    expandCommentPanel() {
+        this.isCommentPanelExpanded = true;
+        this.commentPanel.classList.add('expanded');
+    }
+
+    collapseCommentPanel() {
+        this.isCommentPanelExpanded = false;
+        this.commentPanel.classList.remove('expanded');
+    }
+
+    loadAllComments() {
+        try {
+            const saved = localStorage.getItem('dashboardComments');
+            if (saved) {
+                this.comments = JSON.parse(saved);
+            }
+        } catch (e) {
+            console.warn('Failed to load comments:', e);
+            this.comments = {};
+        }
+    }
+
+    saveAllComments() {
+        try {
+            localStorage.setItem('dashboardComments', JSON.stringify(this.comments));
+        } catch (e) {
+            console.warn('Failed to save comments:', e);
+        }
+    }
+
+    getCommentsForCurrentDashboard() {
+        if (!this.currentDashboard) return [];
+        return this.comments[this.currentDashboard] || [];
+    }
+
+    renderComments() {
+        const comments = this.getCommentsForCurrentDashboard();
+
+        // Update badge
+        const totalCount = comments.reduce((acc, c) => acc + 1 + (c.replies?.length || 0), 0);
+        this.commentBadge.textContent = totalCount;
+        this.commentBadge.setAttribute('data-count', totalCount);
+
+        // Show/hide empty state
+        if (comments.length === 0) {
+            this.commentEmpty.classList.remove('hidden');
+            // Remove any existing comment items
+            this.commentList.querySelectorAll('.comment-item, .comment-reply').forEach(el => el.remove());
+            return;
+        }
+
+        this.commentEmpty.classList.add('hidden');
+
+        // Build comments HTML
+        const html = comments.map(comment => this.renderCommentItem(comment)).join('');
+
+        // Keep empty state element but update rest
+        this.commentList.innerHTML = `
+            <div class="comment-empty hidden" id="comment-empty">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <p>No comments yet</p>
+                <span>Start a discussion about this dashboard</span>
+            </div>
+            ${html}
+        `;
+        this.commentEmpty = document.getElementById('comment-empty');
+    }
+
+    renderCommentItem(comment, isReply = false) {
+        const initials = this.getInitials(comment.author);
+        const timeAgo = this.getTimeAgo(comment.timestamp);
+
+        const repliesHtml = (comment.replies || []).map(reply =>
+            `<div class="comment-reply">${this.renderCommentItem(reply, true)}</div>`
+        ).join('');
+
+        const replyFormHtml = !isReply ? `
+            <div class="comment-reply-form" id="reply-form-${comment.id}">
+                <div class="comment-form__input-wrapper">
+                    <input type="text" class="comment-form__input" id="reply-input-${comment.id}" placeholder="Write a reply..." autocomplete="off">
+                    <button type="button" class="reply-cancel-btn comment-item__action" style="padding: 6px 8px;">Cancel</button>
+                    <button type="button" class="reply-submit-btn comment-form__submit" data-comment-id="${comment.id}" title="Send Reply">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        ` : '';
+
+        return `
+            <div class="comment-item" data-comment-id="${comment.id}">
+                <div class="comment-item__header">
+                    <div class="comment-item__avatar">${initials}</div>
+                    <div class="comment-item__meta">
+                        <div class="comment-item__author">${this.escapeHtml(comment.author)}</div>
+                        <div class="comment-item__time">${timeAgo}</div>
+                    </div>
+                </div>
+                <div class="comment-item__text">${this.escapeHtml(comment.text)}</div>
+                <div class="comment-item__actions">
+                    ${!isReply ? `<button class="comment-item__action" data-action="reply" data-comment-id="${comment.id}">Reply</button>` : ''}
+                    <button class="comment-item__action" data-action="delete" data-comment-id="${comment.id}" ${isReply ? `data-parent-id="${comment.parentId}"` : ''}>Delete</button>
+                </div>
+                ${replyFormHtml}
+                ${repliesHtml}
+            </div>
+        `;
+    }
+
+    showReplyForm(commentId) {
+        // Hide all other reply forms
+        this.commentList.querySelectorAll('.comment-reply-form.active').forEach(el => {
+            el.classList.remove('active');
+        });
+
+        const replyForm = document.getElementById(`reply-form-${commentId}`);
+        if (replyForm) {
+            replyForm.classList.add('active');
+            const input = document.getElementById(`reply-input-${commentId}`);
+            if (input) input.focus();
+        }
+    }
+
+    submitComment() {
+        const text = this.commentInput.value.trim();
+        if (!text || !this.currentDashboard) return;
+
+        const comment = {
+            id: this.generateId(),
+            author: this.getCurrentUser(),
+            text: text,
+            timestamp: Date.now(),
+            replies: []
+        };
+
+        if (!this.comments[this.currentDashboard]) {
+            this.comments[this.currentDashboard] = [];
+        }
+
+        this.comments[this.currentDashboard].push(comment);
+        this.saveAllComments();
+        this.renderComments();
+        this.commentInput.value = '';
+    }
+
+    submitReply(parentCommentId, text) {
+        if (!text || !this.currentDashboard) return;
+
+        const comments = this.comments[this.currentDashboard] || [];
+        const parentComment = comments.find(c => c.id === parentCommentId);
+
+        if (!parentComment) return;
+
+        const reply = {
+            id: this.generateId(),
+            parentId: parentCommentId,
+            author: this.getCurrentUser(),
+            text: text,
+            timestamp: Date.now()
+        };
+
+        if (!parentComment.replies) {
+            parentComment.replies = [];
+        }
+
+        parentComment.replies.push(reply);
+        this.saveAllComments();
+        this.renderComments();
+    }
+
+    deleteComment(commentId, parentId = null) {
+        if (!this.currentDashboard) return;
+
+        const comments = this.comments[this.currentDashboard] || [];
+
+        if (parentId) {
+            // Delete a reply
+            const parentComment = comments.find(c => c.id === parentId);
+            if (parentComment && parentComment.replies) {
+                parentComment.replies = parentComment.replies.filter(r => r.id !== commentId);
+            }
+        } else {
+            // Delete a top-level comment
+            this.comments[this.currentDashboard] = comments.filter(c => c.id !== commentId);
+        }
+
+        this.saveAllComments();
+        this.renderComments();
+    }
+
+    // Helper methods
+    generateId() {
+        return 'c_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+    }
+
+    getCurrentUser() {
+        // In a real app, this would come from authentication
+        // For now, use a stored name or prompt
+        let userName = localStorage.getItem('commentUserName');
+        if (!userName) {
+            userName = prompt('Enter your name for comments:', 'Manager') || 'Anonymous';
+            localStorage.setItem('commentUserName', userName);
+        }
+        return userName;
+    }
+
+    getInitials(name) {
+        return name
+            .split(' ')
+            .map(n => n[0])
+            .join('')
+            .toUpperCase()
+            .slice(0, 2);
+    }
+
+    getTimeAgo(timestamp) {
+        const seconds = Math.floor((Date.now() - timestamp) / 1000);
+
+        if (seconds < 60) return 'Just now';
+        if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+        if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+
+        return new Date(timestamp).toLocaleDateString();
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+}
+
+// ============================================
+// Authentication Manager
+// ============================================
+class AuthManager {
+    constructor() {
+        this.currentUser = null;
+        this.loginPage = document.getElementById('login-page');
+        this.mainApp = document.getElementById('main-app');
+        this.loginError = document.getElementById('login-error');
+        this.loginErrorText = document.getElementById('login-error-text');
+        this.logoutBtn = document.getElementById('logout-btn');
+        this.userAvatar = document.getElementById('user-avatar');
+        this.userName = document.getElementById('user-name');
+        this.userEmail = document.getElementById('user-email');
+
+        this.init();
+    }
+
+    init() {
+        // Check for existing session
+        const existingSession = this.loadSession();
+        if (existingSession && this.isSessionValid(existingSession)) {
+            this.currentUser = existingSession;
+            this.showApp();
+            this.updateUserDisplay();
+        } else {
+            this.clearSession();
+            this.showLogin();
+            this.initGoogleSignIn();
+        }
+
+        // Bind logout button
+        if (this.logoutBtn) {
+            this.logoutBtn.addEventListener('click', () => this.signOut());
+        }
+    }
+
+    initGoogleSignIn() {
+        // Wait for Google Identity Services to load
+        const checkGoogle = setInterval(() => {
+            if (typeof google !== 'undefined' && google.accounts) {
+                clearInterval(checkGoogle);
+                this.renderGoogleButton();
+            }
+        }, 100);
+
+        // Timeout after 10 seconds
+        setTimeout(() => {
+            clearInterval(checkGoogle);
+            if (typeof google === 'undefined') {
+                this.showError('Failed to load Google Sign-In. Please refresh the page.');
+            }
+        }, 10000);
+    }
+
+    renderGoogleButton() {
+        google.accounts.id.initialize({
+            client_id: AUTH_CONFIG.GOOGLE_CLIENT_ID,
+            callback: (response) => this.handleCredentialResponse(response),
+            auto_select: false,
+            cancel_on_tap_outside: true
+        });
+
+        google.accounts.id.renderButton(
+            document.getElementById('google-signin-btn'),
+            {
+                theme: 'outline',
+                size: 'large',
+                text: 'signin_with',
+                shape: 'rectangular',
+                logo_alignment: 'left',
+                width: 280
+            }
+        );
+    }
+
+    handleCredentialResponse(response) {
+        try {
+            // Decode the JWT token
+            const payload = this.decodeJwt(response.credential);
+
+            if (!payload) {
+                this.showError('Failed to verify your account. Please try again.');
+                return;
+            }
+
+            // Validate domain
+            if (!this.validateDomain(payload.email)) {
+                this.showError(`Access denied. Only @${AUTH_CONFIG.ALLOWED_DOMAIN} emails are allowed.`);
+                return;
+            }
+
+            // Create user session
+            const user = {
+                email: payload.email,
+                name: payload.name,
+                picture: payload.picture,
+                loginTime: Date.now()
+            };
+
+            // Save session and show app
+            this.currentUser = user;
+            this.saveSession(user);
+            this.hideError();
+            this.showApp();
+            this.updateUserDisplay();
+
+        } catch (error) {
+            console.error('Authentication error:', error);
+            this.showError('Authentication failed. Please try again.');
+        }
+    }
+
+    decodeJwt(token) {
+        try {
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(
+                atob(base64)
+                    .split('')
+                    .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                    .join('')
+            );
+            return JSON.parse(jsonPayload);
+        } catch (error) {
+            console.error('JWT decode error:', error);
+            return null;
+        }
+    }
+
+    validateDomain(email) {
+        if (!email) return false;
+        const domain = email.split('@')[1];
+        return domain && domain.toLowerCase() === AUTH_CONFIG.ALLOWED_DOMAIN.toLowerCase();
+    }
+
+    // Generate browser fingerprint for session binding
+    generateFingerprint() {
+        const data = [
+            navigator.userAgent,
+            navigator.language,
+            screen.colorDepth,
+            screen.width + 'x' + screen.height,
+            new Date().getTimezoneOffset()
+        ].join('|');
+
+        // Simple hash function
+        let hash = 0;
+        for (let i = 0; i < data.length; i++) {
+            const char = data.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        return Math.abs(hash).toString(36);
+    }
+
+    // Generate integrity hash for session data
+    generateIntegrityHash(user) {
+        const data = user.email + user.loginTime + AUTH_CONFIG.GOOGLE_CLIENT_ID;
+        let hash = 0;
+        for (let i = 0; i < data.length; i++) {
+            const char = data.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        return Math.abs(hash).toString(36);
+    }
+
+    saveSession(user) {
+        try {
+            const sessionData = {
+                ...user,
+                fingerprint: this.generateFingerprint(),
+                integrity: this.generateIntegrityHash(user)
+            };
+            // Encode session data
+            const encoded = btoa(JSON.stringify(sessionData));
+            localStorage.setItem('dashboardHubSession', encoded);
+        } catch (error) {
+            // Silent fail for security
+        }
+    }
+
+    loadSession() {
+        try {
+            const encoded = localStorage.getItem('dashboardHubSession');
+            if (!encoded) return null;
+
+            // Decode session
+            const sessionData = JSON.parse(atob(encoded));
+
+            // Verify fingerprint (browser binding)
+            if (sessionData.fingerprint !== this.generateFingerprint()) {
+                this.clearSession();
+                return null;
+            }
+
+            // Verify integrity (tampering detection)
+            const expectedHash = this.generateIntegrityHash(sessionData);
+            if (sessionData.integrity !== expectedHash) {
+                this.clearSession();
+                return null;
+            }
+
+            return sessionData;
+        } catch (error) {
+            // Invalid session format - clear it
+            this.clearSession();
+            return null;
+        }
+    }
+
+    isSessionValid(session) {
+        if (!session || !session.loginTime) return false;
+        const elapsed = Date.now() - session.loginTime;
+        return elapsed < AUTH_CONFIG.SESSION_DURATION;
+    }
+
+    clearSession() {
+        localStorage.removeItem('dashboardHubSession');
+        this.currentUser = null;
+    }
+
+    signOut() {
+        this.clearSession();
+
+        // Revoke Google session if available
+        if (typeof google !== 'undefined' && google.accounts) {
+            google.accounts.id.disableAutoSelect();
+        }
+
+        // Destroy dashboard hub so new user gets fresh view
+        if (window.dashboardHub) {
+            window.dashboardHub = null;
+        }
+
+        // Show login page
+        this.showLogin();
+        this.initGoogleSignIn();
+    }
+
+    showLogin() {
+        if (this.loginPage) this.loginPage.classList.remove('hidden');
+        if (this.mainApp) this.mainApp.classList.add('hidden');
+    }
+
+    async showApp() {
+        if (this.loginPage) this.loginPage.classList.add('hidden');
+        if (this.mainApp) this.mainApp.classList.remove('hidden');
+
+        // Create fresh dashboard hub for new user
+        window.dashboardHub = new DashboardHub();
+
+        // Fetch roles from Google Sheets before rendering
+        await window.dashboardHub.fetchSheetRoles();
+
+        // Re-render with correct roles
+        window.dashboardHub.renderCategories();
+        window.dashboardHub.renderSidebar();
+    }
+
+    updateUserDisplay() {
+        if (!this.currentUser) return;
+
+        // Update user name
+        if (this.userName) {
+            this.userName.textContent = this.currentUser.name || 'User';
+        }
+
+        // Update user email
+        if (this.userEmail) {
+            this.userEmail.textContent = this.currentUser.email || '';
+        }
+
+        // Update avatar
+        if (this.userAvatar) {
+            if (this.currentUser.picture) {
+                this.userAvatar.innerHTML = `<img src="${this.currentUser.picture}" alt="Avatar" referrerpolicy="no-referrer">`;
+            } else {
+                // Show initials
+                const initials = (this.currentUser.name || 'U')
+                    .split(' ')
+                    .map(n => n[0])
+                    .join('')
+                    .toUpperCase()
+                    .slice(0, 2);
+                this.userAvatar.textContent = initials;
+            }
+        }
+    }
+
+    showError(message) {
+        if (this.loginError && this.loginErrorText) {
+            this.loginErrorText.textContent = message;
+            this.loginError.classList.add('visible');
+        }
+    }
+
+    hideError() {
+        if (this.loginError) {
+            this.loginError.classList.remove('visible');
+        }
+    }
+
+    isAuthenticated() {
+        return this.currentUser !== null && this.isSessionValid(this.currentUser);
+    }
+
+    getUser() {
+        return this.currentUser;
+    }
 }
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    window.dashboardHub = new DashboardHub();
+    // Initialize auth manager first
+    window.authManager = new AuthManager();
 });
