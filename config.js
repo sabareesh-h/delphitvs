@@ -334,13 +334,13 @@ const DASHBOARD_CONFIG = {
                     id: "cost_overview",
                     title: "Cost Overview",
                     purpose: "Overall cost breakdown and trends",
-                    embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiNWZhYjA2OTMtNmZlOC00YTU2LTg4ZDgtYTMxYWQ5Nzk3NDg5IiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9"
+                    embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiYzk5ZjQ2NDQtZjYyNy00Mzc4LThlZDUtYWJhYzhlZjlmODc0IiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9&pageName=0bbdd63643eb5ede008d"
                 },
                 {
                     id: "loss_analysis",
                     title: "Loss Analysis",
                     purpose: "Identify and track cost leakages",
-                    embedUrl: "https://app.powerbi.com/view?r=YOUR_EMBED_TOKEN_HERE"
+                    embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiYzk5ZjQ2NDQtZjYyNy00Mzc4LThlZDUtYWJhYzhlZjlmODc0IiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9&pageName=ff5ad04e2ac762bb7ece"
                 }
             ]
         },
