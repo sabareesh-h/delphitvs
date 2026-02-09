@@ -355,7 +355,13 @@ const DASHBOARD_CONFIG = {
                     id: "wip_tracker",
                     title: "WIP Tracker",
                     purpose: "Current work-in-progress status",
-                    embedUrl: "https://app.powerbi.com/view?r=YOUR_EMBED_TOKEN_HERE"
+                    embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiYzY2ODY0NmUtMWZjOS00ZmRiLTkwN2QtYTQyYzI2MTZhNGFlIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9"
+                },
+                {
+                    id: "WIP_department",
+                    title: "WIP Department",
+                    purpose: "Current work-in-progress status",
+                    embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiYzY2ODY0NmUtMWZjOS00ZmRiLTkwN2QtYTQyYzI2MTZhNGFlIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9&pageName=469b28c00aa2a617ca4a"
                 }
 
             ]
