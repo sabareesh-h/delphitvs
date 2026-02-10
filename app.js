@@ -3,6 +3,58 @@
  * Single Page Application for seamless dashboard navigation
  */
 
+// ============================================
+// URL Decryption (double-Base64 with reversal)
+// ============================================
+function _d(e) {
+    return atob(atob(e).split('').reverse().join(''));
+}
+
+// ============================================
+// DevTools Detection
+// ============================================
+(function () {
+    const threshold = 160;
+    let devtoolsWarned = false;
+
+    function showDevToolsWarning() {
+        if (devtoolsWarned) return;
+        devtoolsWarned = true;
+        const overlay = document.createElement('div');
+        overlay.id = 'devtools-warning';
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;flex-direction:column;color:white;font-family:Segoe UI,sans-serif;';
+        overlay.innerHTML = '<div style="font-size:3rem;margin-bottom:1rem">🔒</div><div style="font-size:1.5rem;font-weight:600;margin-bottom:0.5rem">Access Restricted</div><p style="color:rgba(255,255,255,0.7);max-width:400px;text-align:center">Developer tools are not permitted on this application. Please close DevTools to continue.</p>';
+        document.body.appendChild(overlay);
+    }
+
+    function hideDevToolsWarning() {
+        const overlay = document.getElementById('devtools-warning');
+        if (overlay) overlay.remove();
+        devtoolsWarned = false;
+    }
+
+    function checkDevTools() {
+        const widthThreshold = window.outerWidth - window.innerWidth > threshold;
+        const heightThreshold = window.outerHeight - window.innerHeight > threshold;
+        if (widthThreshold || heightThreshold) {
+            showDevToolsWarning();
+        } else if (devtoolsWarned) {
+            hideDevToolsWarning();
+        }
+    }
+
+    setInterval(checkDevTools, 1000);
+
+    // Disable right-click context menu
+    document.addEventListener('contextmenu', e => e.preventDefault());
+
+    // Disable common DevTools shortcuts
+    document.addEventListener('keydown', e => {
+        if (e.key === 'F12') e.preventDefault();
+        if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) e.preventDefault();
+        if (e.ctrlKey && e.key === 'u') e.preventDefault();
+    });
+})();
 class DashboardHub {
     constructor() {
         // State
@@ -98,6 +150,60 @@ class DashboardHub {
             // Fallback to encoded roles
             return FALLBACK_ROLES;
         }
+    }
+
+    // ============================================
+    // Dashboard URL Fetching (from Google Sheet)
+    // ============================================
+    async fetchDashboardUrls() {
+        const now = Date.now();
+
+        // Return cached URLs if still valid
+        if (SHEET_URLS && (now - URLS_FETCH_TIME) < URLS_CACHE_DURATION) {
+            return SHEET_URLS;
+        }
+
+        try {
+            const response = await fetch(URLS_SHEET_URL);
+            if (!response.ok) throw new Error('Failed to fetch URLs');
+
+            const csv = await response.text();
+            const urls = this.parseCSVToUrls(csv);
+
+            // Cache the results
+            SHEET_URLS = urls;
+            URLS_FETCH_TIME = now;
+
+            return urls;
+        } catch (error) {
+            console.warn('URL sheet unavailable, using fallback');
+            return null;
+        }
+    }
+
+    // Parse CSV to { dashboard_id: embed_url } map
+    parseCSVToUrls(csv) {
+        const urls = {};
+        const lines = csv.split('\n');
+
+        // Skip header row
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+
+            // Split on first comma only (URL may contain commas in query params)
+            const firstComma = line.indexOf(',');
+            if (firstComma === -1) continue;
+
+            const id = line.substring(0, firstComma).replace(/"/g, '').trim();
+            const url = line.substring(firstComma + 1).replace(/"/g, '').trim();
+
+            if (id && url) {
+                urls[id] = url;
+            }
+        }
+
+        return urls;
     }
 
     // Parse CSV to roles object
@@ -208,47 +314,44 @@ class DashboardHub {
     renderCategories() {
         const categories = this.getFilteredConfig();
 
-        this.categoriesContainer.innerHTML = categories.map(category => `
-      <div class="category-tile" data-category="${category.id}">
-        <div class="category-header" data-category-id="${category.id}">
-          <div class="category-icon">${category.icon}</div>
-          <div class="category-info">
-            <div class="category-name">${category.name}</div>
-            <div class="category-description">${category.description}</div>
-          </div>
-          <div class="category-count">${category.dashboards.length} report${category.dashboards.length !== 1 ? 's' : ''}</div>
-          <div class="category-expand-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
-          </div>
-        </div>
-        <div class="dashboard-list">
-          <div class="dashboard-list__inner">
-            ${category.dashboards.map(dashboard => `
-              <div class="dashboard-card" data-dashboard-id="${dashboard.id}" data-category-id="${category.id}">
-                <div class="dashboard-card__icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                    <line x1="3" y1="9" x2="21" y2="9"></line>
-                    <line x1="9" y1="21" x2="9" y2="9"></line>
-                  </svg>
+        this.categoriesContainer.innerHTML = categories.map(category => {
+            // Flatten groups: each group becomes a card, standalone items become cards
+            const cards = category.dashboards.map(dashboard => {
+                return `
+                  <div class="dashboard-card" data-dashboard-id="${dashboard.id}" data-category-id="${category.id}">
+                    <div class="dashboard-card__icon">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="3" y1="9" x2="21" y2="9"></line>
+                        <line x1="9" y1="21" x2="9" y2="9"></line>
+                      </svg>
+                    </div>
+                    <div class="dashboard-card__info">
+                      <div class="dashboard-card__title">${dashboard.title}</div>
+                      <div class="dashboard-card__purpose">${dashboard.purpose || ''}</div>
+                    </div>
+                    <div class="dashboard-card__arrow">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                      </svg>
+                    </div>
+                  </div>
+                `;
+            }).join('');
+
+            return `
+              <div class="section-row" data-category="${category.id}">
+                <div class="section-label">
+                  <span class="section-label__icon">${category.icon}</span>
+                  ${category.name}
+                  <span class="section-label__count">${category.dashboards.length}</span>
                 </div>
-                <div class="dashboard-card__info">
-                  <div class="dashboard-card__title">${dashboard.title}</div>
-                  <div class="dashboard-card__purpose">${dashboard.purpose || ''}</div>
-                </div>
-                <div class="dashboard-card__arrow">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="9 18 15 12 9 6"></polyline>
-                  </svg>
+                <div class="section-cards">
+                  ${cards}
                 </div>
               </div>
-            `).join('')}
-          </div>
-        </div>
-      </div>
-    `).join('');
+            `;
+        }).join('');
     }
 
     renderSidebar() {
@@ -296,15 +399,11 @@ class DashboardHub {
     // ============================================
 
     bindEvents() {
-        // Category headers (accordion toggle)
+        // Dashboard card clicks on homepage
         this.categoriesContainer.addEventListener('click', (e) => {
-            const header = e.target.closest('.category-header');
             const card = e.target.closest('.dashboard-card');
-
             if (card) {
                 this.openDashboard(card.dataset.dashboardId, card.dataset.categoryId);
-            } else if (header) {
-                this.toggleCategory(header.dataset.categoryId);
             }
         });
 
@@ -375,32 +474,15 @@ class DashboardHub {
     }
 
     // ============================================
-    // Category Accordion
+    // Category (no-op, flat layout has no accordion)
     // ============================================
 
     toggleCategory(categoryId) {
-        const tile = document.querySelector(`.category-tile[data-category="${categoryId}"]`);
-        if (!tile) return;
-
-        const isExpanded = tile.classList.contains('expanded');
-
-        if (isExpanded) {
-            tile.classList.remove('expanded');
-            this.expandedCategories.delete(categoryId);
-        } else {
-            tile.classList.add('expanded');
-            this.expandedCategories.add(categoryId);
-            this.currentCategory = categoryId;
-            this.saveState();
-        }
+        // No-op: flat layout, no accordion
     }
 
     expandCategory(categoryId) {
-        const tile = document.querySelector(`.category-tile[data-category="${categoryId}"]`);
-        if (tile && !tile.classList.contains('expanded')) {
-            tile.classList.add('expanded');
-            this.expandedCategories.add(categoryId);
-        }
+        // No-op: flat layout, no accordion
     }
 
     // ============================================
@@ -454,7 +536,7 @@ class DashboardHub {
         this.renderComments();
     }
 
-    loadDashboard(dashboard) {
+    async loadDashboard(dashboard) {
         // Hide all iframes
         this.loadedDashboards.forEach(iframe => {
             iframe.classList.remove('active');
@@ -469,8 +551,27 @@ class DashboardHub {
             const iframe = document.createElement('iframe');
             iframe.title = dashboard.title;
 
-            // Construct URL with parameters to hide bottom/side bars
-            let url = dashboard.embedUrl;
+            // Fetch URL from Google Sheet (or fallback to encoded embedUrl)
+            let url;
+            try {
+                const urlMap = await this.fetchDashboardUrls();
+                if (urlMap && urlMap[dashboard.id]) {
+                    url = urlMap[dashboard.id];
+                } else if (dashboard.embedUrl) {
+                    url = _d(dashboard.embedUrl);
+                } else {
+                    console.error('No URL found for dashboard:', dashboard.id);
+                    return;
+                }
+            } catch (e) {
+                if (dashboard.embedUrl) {
+                    url = _d(dashboard.embedUrl);
+                } else {
+                    console.error('Failed to load URL for:', dashboard.id);
+                    return;
+                }
+            }
+
             const params = ['navContentPaneEnabled=false', 'filterPaneEnabled=false'];
 
             if (dashboard.pageName) {
@@ -483,6 +584,17 @@ class DashboardHub {
             iframe.src = url;
             iframe.allowFullscreen = true;
             iframe.className = 'dashboard-iframe active';
+
+            // After iframe loads, mask the src from DevTools without navigating away
+            iframe.addEventListener('load', () => {
+                try {
+                    Object.defineProperty(iframe, 'src', {
+                        get: () => 'about:blank',
+                        set: () => { },
+                        configurable: true
+                    });
+                } catch (e) { /* ignore */ }
+            });
 
             this.dashboardContainer.appendChild(iframe);
             this.loadedDashboards.set(dashboard.id, iframe);
@@ -620,21 +732,10 @@ class DashboardHub {
 
             const state = JSON.parse(saved);
 
-            // Restore expanded categories
-            if (state.expandedCategories && Array.isArray(state.expandedCategories)) {
-                state.expandedCategories.forEach(categoryId => {
-                    this.expandCategory(categoryId);
-                });
-            }
-
             // Restore current category
             if (state.currentCategory) {
                 this.currentCategory = state.currentCategory;
-                this.expandCategory(state.currentCategory);
             }
-
-            // Note: We don't auto-open the last dashboard on page load
-            // to give user control, but we could add that feature here
 
         } catch (e) {
             console.warn('Failed to restore state:', e);

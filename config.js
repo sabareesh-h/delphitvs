@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Power BI Dashboard Hub - Configuration
  * 
  * HOW TO ADD DASHBOARDS:
@@ -64,6 +64,18 @@ let SHEET_ROLES = null;
 let ROLES_FETCH_TIME = 0;
 const ROLES_CACHE_DURATION = 1 * 60 * 1000; // 1 minute cache (roles update quickly)
 
+// ============================================
+// DASHBOARD URLs (fetched from Google Sheet)
+// ============================================
+// URLs are stored in Google Sheets so they never appear in source code
+// Sheet columns: dashboard_id, embed_url
+const URLS_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR1utAiDyDFwAy8kVybHlYsUnha78P7PuXLFb1L2YGh1X9Vk6msf_gXgjN4QnEUHDldUaNylhjVQFcn/pub?gid=1422175149&single=true&output=csv';
+
+// Cache for URLs fetched from sheet
+let SHEET_URLS = null;
+let URLS_FETCH_TIME = 0;
+const URLS_CACHE_DURATION = 5 * 60 * 1000; // 5 minute cache
+
 // Decode fallback roles
 const FALLBACK_ROLES = (() => {
     try {
@@ -82,7 +94,7 @@ const DASHBOARD_CONFIG = {
             id: "production",
             name: "Production",
             description: "Production metrics and line performance",
-            icon: "📊",
+            icon: "ðŸ“Š",
             requiredRoles: ['production'],  // Restricted - only production role can see
             dashboards: [
                 {
@@ -93,19 +105,16 @@ const DASHBOARD_CONFIG = {
                         {
                             id: "nozzle_prod",
                             title: "Production",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiZjBiNmIxZjctOTJiNy00MDE3LWIxODctYjBkNWQ0YjgxZWEzIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "b53aed22d56986701350"
                         },
                         {
                             id: "nozzle_q1",
                             title: "Quality Level 1",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiZjBiNmIxZjctOTJiNy00MDE3LWIxODctYjBkNWQ0YjgxZWEzIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "7f98b7bb94720b9ec771"
                         },
                         {
                             id: "nozzle_q2",
                             title: "Quality Level 2",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiZjBiNmIxZjctOTJiNy00MDE3LWIxODctYjBkNWQ0YjgxZWEzIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "2b649a4660c0bad8e84e"
                         }
                     ]
@@ -118,31 +127,26 @@ const DASHBOARD_CONFIG = {
                         {
                             id: "injector_prod",
                             title: "Production",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiODEzMzVhZDctYTM5OC00Yjk0LWE1NmUtODA3ODlmM2MyNmM2IiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "323d5bb218fe3628c888"
                         },
                         {
                             id: "injector_q1",
                             title: "Quality Level 1",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiODEzMzVhZDctYTM5OC00Yjk0LWE1NmUtODA3ODlmM2MyNmM2IiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "1397f0b129e93cfb9ba3"
                         },
                         {
                             id: "injector_q2",
                             title: "Quality Level 2",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiODEzMzVhZDctYTM5OC00Yjk0LWE1NmUtODA3ODlmM2MyNmM2IiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "73b43e36ab6c7fc3aaa7"
                         },
                         {
                             id: "injector_q3",
                             title: "Quality Level 3",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiODEzMzVhZDctYTM5OC00Yjk0LWE1NmUtODA3ODlmM2MyNmM2IiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "108d12e158c12e0c3753"
                         },
                         {
                             id: "injector_q4",
                             title: "Quality Level 4",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiODEzMzVhZDctYTM5OC00Yjk0LWE1NmUtODA3ODlmM2MyNmM2IiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "230f84b5f1eadca4f3f5"
                         }
                     ]
@@ -155,25 +159,21 @@ const DASHBOARD_CONFIG = {
                         {
                             id: "rail_prod",
                             title: "Production",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiNDYwMjAxYTktODFiMS00Y2FjLWI1NTQtYTBjMDk3YjBkMWYxIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "af8fb4c7bff453dbbb78"
                         },
                         {
                             id: "rail_q1",
                             title: "Quality Level 1",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiNDYwMjAxYTktODFiMS00Y2FjLWI1NTQtYTBjMDk3YjBkMWYxIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "e8806a0ffc0fd46ccda8"
                         },
                         {
                             id: "rail_q2",
                             title: "Quality Level 2",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiNDYwMjAxYTktODFiMS00Y2FjLWI1NTQtYTBjMDk3YjBkMWYxIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "c5339ee73406c7833bad"
                         },
                         {
                             id: "rail_q3",
                             title: "Quality Level 3",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiNDYwMjAxYTktODFiMS00Y2FjLWI1NTQtYTBjMDk3YjBkMWYxIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "41122142a95582a72029"
                         }
                     ]
@@ -186,25 +186,21 @@ const DASHBOARD_CONFIG = {
                         {
                             id: "filter_prod_element",
                             title: "Production Element",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiYmQ1MzE4ZDUtYjBmYS00OTk1LTlhOTgtODBiMzhjZTE0YzlmIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "802d7daef2725ac8a4c1"
                         },
                         {
                             id: "filter_prod_assembly",
                             title: "Production Assembly",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiYmQ1MzE4ZDUtYjBmYS00OTk1LTlhOTgtODBiMzhjZTE0YzlmIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "0f329526bbbb4c1d70dc"
                         },
                         {
                             id: "filter_q_element",
                             title: "Quality Element",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiYmQ1MzE4ZDUtYjBmYS00OTk1LTlhOTgtODBiMzhjZTE0YzlmIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "ca326cf0261b38e1d390"
                         },
                         {
                             id: "filter_q_Assy",
                             title: "Quality Assembly",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiYmQ1MzE4ZDUtYjBmYS00OTk1LTlhOTgtODBiMzhjZTE0YzlmIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "17d21cf99a40bbcac00b"
                         }
                     ]
@@ -217,25 +213,21 @@ const DASHBOARD_CONFIG = {
                         {
                             id: "dfp6_prod",
                             title: "Production",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiNGNjYTg2YjktY2RkNi00YzNjLTk0NTktNzAxYjEyMzhhY2M2IiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "5d74c72d1294fea31b32"
                         },
                         {
                             id: "dfp6_q1",
                             title: "Quality Level 1",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiNGNjYTg2YjktY2RkNi00YzNjLTk0NTktNzAxYjEyMzhhY2M2IiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "2a02a34e61d00de6b244"
                         },
                         {
                             id: "dfp6_q2",
                             title: "Quality Level 2",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiNGNjYTg2YjktY2RkNi00YzNjLTk0NTktNzAxYjEyMzhhY2M2IiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "34972f79d06176b8b48d"
                         },
                         {
                             id: "dfp6_q3",
                             title: "Quality Level 3",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiNGNjYTg2YjktY2RkNi00YzNjLTk0NTktNzAxYjEyMzhhY2M2IiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "2d4fdd3fe795fbf5d695"
                         }
                     ]
@@ -248,25 +240,21 @@ const DASHBOARD_CONFIG = {
                         {
                             id: "dfp1_prod",
                             title: "Production DFP1",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiYzE5YTEwZTUtZWYxYi00MWMwLWJhNGUtYWUwNWRiMDk5NTJlIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "dbfb50c9dabdb5401b40"
                         },
                         {
                             id: "dfp1_primer",
                             title: "Production Primer",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiYzE5YTEwZTUtZWYxYi00MWMwLWJhNGUtYWUwNWRiMDk5NTJlIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "f11c479d431df8e649f6"
                         },
                         {
                             id: "dfp1_q1",
                             title: "Quality Level 1",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiYzE5YTEwZTUtZWYxYi00MWMwLWJhNGUtYWUwNWRiMDk5NTJlIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "f0acd7ea66c4c87d1b0e"
                         },
                         {
                             id: "dfp1_q2",
                             title: "Quality Level 2",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiYzE5YTEwZTUtZWYxYi00MWMwLWJhNGUtYWUwNWRiMDk5NTJlIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "407f67793c84a48ea825"
                         }
                     ]
@@ -279,19 +267,16 @@ const DASHBOARD_CONFIG = {
                         {
                             id: "dfp4_prod",
                             title: "Production",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiNDFlYTRlYmItNmU0NC00MjMzLTg1ZGYtYTRmNjYyYzNkZGE2IiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "d0f1414f0e3041d1ba44"
                         },
                         {
                             id: "dfp4_q1",
                             title: "Quality Level 1",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiNDFlYTRlYmItNmU0NC00MjMzLTg1ZGYtYTRmNjYyYzNkZGE2IiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "b1fc41020c427b4c64c5"
                         },
                         {
                             id: "dfp4_q2",
                             title: "Quality Level 2",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiNDFlYTRlYmItNmU0NC00MjMzLTg1ZGYtYTRmNjYyYzNkZGE2IiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "001bb24ba1ac1e96bfdf"
                         }
                     ]
@@ -304,19 +289,16 @@ const DASHBOARD_CONFIG = {
                         {
                             id: "upcr_prod",
                             title: "Production",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiYzRlNDEyNmEtNDY1ZC00NmE2LTkzYjUtMjI5ZWMzYjNiMDA5IiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "f1a96400fc2e4be59f0d"
                         },
                         {
                             id: "upcr_q1",
                             title: "Quality Level 1",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiYzRlNDEyNmEtNDY1ZC00NmE2LTkzYjUtMjI5ZWMzYjNiMDA5IiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "97f0c596eaa37c791886"
                         },
                         {
                             id: "upcr_q2",
                             title: "Quality Level 2",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiYzRlNDEyNmEtNDY1ZC00NmE2LTkzYjUtMjI5ZWMzYjNiMDA5IiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "9e7d0a562c9e94ebcbd0"
                         }
                     ]
@@ -327,20 +309,18 @@ const DASHBOARD_CONFIG = {
             id: "cost",
             name: "Cost",
             description: "Cost drivers and loss analysis",
-            icon: "💰",
+            icon: "ðŸ’°",
             requiredRoles: ['cost', 'finance'],  // Restricted - not visible to production role
             dashboards: [
                 {
                     id: "cost_overview",
                     title: "Cost Overview",
                     purpose: "Overall cost breakdown and trends",
-                    embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiYzk5ZjQ2NDQtZjYyNy00Mzc4LThlZDUtYWJhYzhlZjlmODc0IiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9&pageName=0bbdd63643eb5ede008d"
                 },
                 {
                     id: "loss_analysis",
                     title: "Loss Analysis",
                     purpose: "Identify and track cost leakages",
-                    embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiYzk5ZjQ2NDQtZjYyNy00Mzc4LThlZDUtYWJhYzhlZjlmODc0IiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9&pageName=ff5ad04e2ac762bb7ece"
                 }
             ]
         },
@@ -348,20 +328,18 @@ const DASHBOARD_CONFIG = {
             id: "wip",
             name: "WIP",
             description: "Work in progress tracking",
-            icon: "🔄",
+            icon: "ðŸ”„",
             requiredRoles: ['wip', 'operations'],  // Restricted - not visible to production role
             dashboards: [
                 {
                     id: "wip_tracker",
                     title: "WIP Tracker",
                     purpose: "Current work-in-progress status",
-                    embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiYzY2ODY0NmUtMWZjOS00ZmRiLTkwN2QtYTQyYzI2MTZhNGFlIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9"
                 },
                 {
                     id: "WIP_department",
                     title: "WIP Department",
                     purpose: "Current work-in-progress status",
-                    embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiYzY2ODY0NmUtMWZjOS00ZmRiLTkwN2QtYTQyYzI2MTZhNGFlIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9&pageName=469b28c00aa2a617ca4a"
                 }
 
             ]
@@ -370,7 +348,7 @@ const DASHBOARD_CONFIG = {
             id: "accuracy",
             name: "Accuracy",
             description: "Quality and accuracy metrics",
-            icon: "✅",
+            icon: "âœ…",
             requiredRoles: ['sap', 'accuracy'],  // Restricted - SAP data, not visible to production role
             dashboards: [
                 {
@@ -381,25 +359,21 @@ const DASHBOARD_CONFIG = {
                         {
                             id: "sap_ctw",
                             title: "CTW",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiODhmNzIxZWUtZjg5MS00ODcyLWE1MjctYzQyMDA5ZDFhZTFkIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "66f4edb8c029c9fbfd7d"
                         },
                         {
                             id: "sap_dispatch",
                             title: "Dispatch",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiODhmNzIxZWUtZjg5MS00ODcyLWE1MjctYzQyMDA5ZDFhZTFkIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "d3b099f02e52d1acc2b4"
                         },
                         {
                             id: "sap_wh_stk",
                             title: "WH Stk",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiODhmNzIxZWUtZjg5MS00ODcyLWE1MjctYzQyMDA5ZDFhZTFkIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "d20be3c5cd3ec267659a"
                         },
                         {
                             id: "sap_comparison",
                             title: "Comparison: SAP & Logbook",
-                            embedUrl: "https://app.powerbi.com/view?r=eyJrIjoiODhmNzIxZWUtZjg5MS00ODcyLWE1MjctYzQyMDA5ZDFhZTFkIiwidCI6ImM4YTAwNDJhLTExZDctNDEzNy1iZGNlLTM2NzY3MjQ4YzA0YyJ9",
                             pageName: "5609698d62ad0e9c748e"
                         }
                     ]
