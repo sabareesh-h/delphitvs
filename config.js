@@ -94,7 +94,7 @@ const DASHBOARD_CONFIG = {
             id: "production",
             name: "Production",
             description: "Production metrics and line performance",
-            icon: "ðŸ“Š",
+            icon: "gear",
             requiredRoles: ['production'],  // Restricted - only production role can see
             dashboards: [
                 {
@@ -309,7 +309,7 @@ const DASHBOARD_CONFIG = {
             id: "cost",
             name: "Cost",
             description: "Cost drivers and loss analysis",
-            icon: "ðŸ’°",
+            icon: "money",
             requiredRoles: ['cost', 'finance'],  // Restricted - not visible to production role
             dashboards: [
                 {
@@ -328,7 +328,7 @@ const DASHBOARD_CONFIG = {
             id: "wip",
             name: "WIP",
             description: "Work in progress tracking",
-            icon: "ðŸ”„",
+            icon: "stock",
             requiredRoles: ['wip', 'operations'],  // Restricted - not visible to production role
             dashboards: [
                 {
@@ -348,7 +348,7 @@ const DASHBOARD_CONFIG = {
             id: "accuracy",
             name: "Accuracy",
             description: "Quality and accuracy metrics",
-            icon: "âœ…",
+            icon: "book",
             requiredRoles: ['sap', 'accuracy'],  // Restricted - SAP data, not visible to production role
             dashboards: [
                 {

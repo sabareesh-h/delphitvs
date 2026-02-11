@@ -55,6 +55,43 @@ function _d(e) {
         if (e.ctrlKey && e.key === 'u') e.preventDefault();
     });
 })();
+// ============================================
+// SVG Icon Map (Black and White)
+// ============================================
+function getCategoryIcon(iconId, size = 24) {
+    const icons = {
+        // Dashboard style icon (overall/tap logo)
+        dashboard: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+        </svg>`,
+        // Gear icon (Production)
+        gear: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>`,
+        // Money icon (Cost)
+        money: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="1" x2="12" y2="23"></line>
+            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+        </svg>`,
+        // Stock/chart icon (WIP)
+        stock: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="20" x2="18" y2="10"></line>
+            <line x1="12" y1="20" x2="12" y2="4"></line>
+            <line x1="6" y1="20" x2="6" y2="14"></line>
+        </svg>`,
+        // Book icon (SAP/Accuracy)
+        book: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+        </svg>`
+    };
+    return icons[iconId] || icons['dashboard'];
+}
+
 class DashboardHub {
     constructor() {
         // State
@@ -320,11 +357,7 @@ class DashboardHub {
                 return `
                   <div class="dashboard-card" data-dashboard-id="${dashboard.id}" data-category-id="${category.id}">
                     <div class="dashboard-card__icon">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                        <line x1="3" y1="9" x2="21" y2="9"></line>
-                        <line x1="9" y1="21" x2="9" y2="9"></line>
-                      </svg>
+                      ${getCategoryIcon(category.icon, 20)}
                     </div>
                     <div class="dashboard-card__info">
                       <div class="dashboard-card__title">${dashboard.title}</div>
@@ -342,7 +375,7 @@ class DashboardHub {
             return `
               <div class="section-row" data-category="${category.id}">
                 <div class="section-label">
-                  <span class="section-label__icon">${category.icon}</span>
+                  <span class="section-label__icon">${getCategoryIcon(category.icon, 20)}</span>
                   ${category.name}
                   <span class="section-label__count">${category.dashboards.length}</span>
                 </div>
@@ -360,7 +393,7 @@ class DashboardHub {
         this.sidebarContent.innerHTML = categories.map(category => `
       <div class="sidebar-category" data-category="${category.id}">
         <div class="sidebar-category__header" data-category-id="${category.id}">
-          <span class="sidebar-category__icon">${category.icon}</span>
+          <span class="sidebar-category__icon">${getCategoryIcon(category.icon, 18)}</span>
           <span>${category.name}</span>
         </div>
         ${category.dashboards.map(dashboard => {
