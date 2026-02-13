@@ -369,7 +369,7 @@ const DASHBOARD_CONFIG = {
                         {
                             id: "sap_wh_stk",
                             title: "WH Stk",
-                            pageName: "d20be3c5cd3ec267659a"
+                            pageName: "eb3f077f6f12e5ce764d"
                         },
                         {
                             id: "sap_comparison",
